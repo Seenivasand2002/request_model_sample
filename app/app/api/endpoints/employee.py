@@ -4,8 +4,8 @@ from models import Employee
 from typing import Annotated, List
 from sqlalchemy.orm import Session
 from api.deps import get_db
-import requests
-
+from fastapi_pagination import Page,add_pagination,paginate
+import math
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ async def employee_create(
     db.commit()
     return {"message": "Successfully created", "employee_id": created_data.id}
 
-@router.get("/{employee_id}/details")
+@router.post("/{employee_id}/details")
 async def getEmp(
     db: Annotated[Session,Depends(get_db)],
     employee_id: int
@@ -32,23 +32,52 @@ async def getEmp(
         )
     return emp_data
 
-@router.get("/get_surya_root")
-async def getRoot():
-    url = "http://192.168.4.26:8000/user/root"
-    response_from_api = requests.get(url=url)
-    res = response_from_api.json()
-    return {"message": res["message"]} 
+@router.post("/get_list_of_employee",response_model=list[EmployeeIn])
+async def getListOfemp(
+    db: Annotated[Session, Depends(get_db)]
+):
+    db_employee = db.query(Employee).all()
+    return db_employee
 
-@router.post("/create_employee_by_surya_api")
-async def postSuryaApiData(employee_in : EmpData):
-    url = "http://192.168.4.26:8000/user/create-Customer"
-    response_from_api = requests.post(url=url,json=employee_in.dict())
-    return dict(message = response_from_api.json())
+@router.post("/get_list_of_employee_using_pagenation",response_model=Page[EmployeeIn])
+async def getListOfemp(
+    db: Annotated[Session, Depends(get_db)]
+):
+    """
+    using fastapi-pagination method
+    """
+    db_employee = db.query(Employee).all()
+    return paginate(db_employee)
 
-@router.get("/get_surya_employee")
-async def getSuryaEmp(employee_id: int):
-    url = f"http://192.168.4.26:8000/user/view-customer-details/{employee_id}"
-    response_from_api = requests.get(url=url)
-    return response_from_api.json()
+add_pagination(router)
+
+@router.post("/get_list_of_employee_pagination")
+async def getListOfempWithOutModel(
+    db: Annotated[Session, Depends(get_db)],
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1)
+):
+    start = (page - 1) * size
+    total_count = db.query(Employee).count()
+    no_of_pages = 1 if int(total_count/size) <= 0 else math.ceil(total_count/size)
+
+    db_employee = db.query(Employee).offset(start).limit(size).all()
+    return {
+        "employees": db_employee,
+        "total": total_count,
+        "page": page,
+        "size": size,
+        "no of page": no_of_pages
+    }
+
+
+
+   
+
+    
+    
 
  
+
+
+
